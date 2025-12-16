@@ -1,80 +1,81 @@
-name: Cleanup Unused Daily Summaries
+name: Create Daily Summary
 
 on:
   schedule:
-    # 建议比创建时间晚一些运行，例如UTC 17点（北京时间次日1点）
-    - cron: '0 17 * * *'
-  workflow_dispatch: # 允许手动触发
+    - cron: '0 16 * * *'  # 每天UTC时间16:00（北京时间24:00）运行
+  workflow_dispatch:       # 允许手动触发
+
 
 permissions:
-  contents: write # 需要写入权限来删除文件
+  contents: write  # 添加这行来授予写入权限
 
 jobs:
-  check-and-clean:
+  create-summary:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 获取全部历史，用于检查文件变更
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find and remove unused summaries
+      - name: Create daily summary
         run: |
-          echo "开始检查24小时内未修改的每日总结..."
-          
-          # 设置时区和计算时间点
+          # 设置时区为北京时间
           export TZ='Asia/Shanghai'
-          CHECK_TIME=$(date -d '24 hours ago' +%s)
           
-          # 查找所有 summary.md 文件
-          find . -path "./.git" -prune -o -type f -name "summary.md" -print | while read file; do
-            echo "检查文件: $file"
-            
-            # 获取该文件最新的提交时间（Unix时间戳）
-            LAST_COMMIT_TIME=$(git log -1 --format="%at" -- "$file" 2>/dev/null)
-            
-            if [ -z "$LAST_COMMIT_TIME" ]; then
-              echo "  警告: 无法获取文件提交历史，跳过。"
-              continue
-            fi
-            
-            # 计算自上次提交后的小时数
-            HOURS_SINCE_LAST_COMMIT=$(( ($(date +%s) - $LAST_COMMIT_TIME) / 3600 ))
-            
-            # 判断条件：如果文件存在超过24小时，且自创建后从未被修改（即只有一次提交记录）
-            COMMIT_COUNT=$(git log --oneline -- "$file" | wc -l)
-            
-            if [ $HOURS_SINCE_LAST_COMMIT -ge 24 ] && [ $COMMIT_COUNT -eq 1 ]; then
-              echo "  符合条件：已存在 ${HOURS_SINCE_LAST_COMMIT} 小时，且从未被修改。准备删除..."
-              rm "$file"
-              echo "  已删除文件: $file"
-              
-              # 尝试删除可能因此变空的上级目录
-              dir=$(dirname "$file")
-              # 如果目录非根目录、非.git目录且为空，则删除
-              if [ "$dir" != "." ] && [ "$dir" != "./.git" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
-                rmdir -p "$dir" 2>/dev/null || true
-                echo "  已清理空目录: $dir"
-              fi
-            else
-              echo "  不符合条件：存在 ${HOURS_SINCE_LAST_COMMIT} 小时，提交次数为 ${COMMIT_COUNT}。"
-            fi
-          done
+          # 创建目录路径
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+          DIR_PATH="$YEAR/$MONTH/$DAY"
           
-          echo "检查完成。"
+          # 创建目录
+          mkdir -p $DIR_PATH
+          
+          # 创建总结文件
+          cat > "$DIR_PATH/summary.md" << EOF
+          # $(date +%Y年%m月%d日) 每日总结
+          
+         
+          ## 💡 心得感悟
+                知识点：
+                    一、C语言：
 
-      - name: Commit and push if changes were made
+                    二、python：
+
+                    三、高数：
+
+                    四、汇编：
+
+                    五、linux指令：
+                    
+
+
+
+                
+                技巧点：
+                      一、C语言：
+
+                    二、python：
+
+                    三、高数：
+
+                    四、汇编：
+
+                    五、linux指令：
+                      
+
+                
+          
+          
+          
+          **自动创建时间：** $(date)
+          EOF
+
+      - name: Commit and push changes
         run: |
-          # 检查是否有文件被删除
-          if git diff --name-only --exit-code; then
-            echo "没有文件被删除，无需提交。"
-          else
-            echo "有文件被删除，正在提交更改..."
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git add -A
-            git commit -m "自动清理24小时内未修改的每日总结 [$(date +%Y-%m-%d)]"
-            git push
-          fi
-
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "自动创建$(date +%Y年%m月%d日)每日总结"
+          git push
